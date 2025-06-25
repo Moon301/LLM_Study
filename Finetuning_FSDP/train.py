@@ -1,4 +1,11 @@
 # python train.py --config fsdp.yaml
+
+"""
+accelerate launch \
+  --multi_gpu --num_processes 4 \
+  train.py --config fsdp.yaml
+"""  
+
 import logging
 from dataclasses import dataclass, field
 import os
@@ -16,9 +23,11 @@ from transformers import(
 from trl import setup_chat_format # 대화 포맷 템플릿 세팅 
 from peft import LoraConfig
 
-from trl import(
-    SFTTrainer # Supervised Fine-Tuning 전용
-)
+from trl import SFTTrainer, SFTConfig # Supervised Fine-Tuning 전용
+
+
+from huggingface_hub import login  
+login(token="")
 
 @dataclass
 class ScriptArguments:
@@ -97,7 +106,7 @@ def training_function(script_args, training_args):
     torch_dtype = torch.bfloat16
     quant_storage_dtype = torch.bfloat16
     
-    # 4bit 압축된 파라미ㅓ를 bfloat16으로 복원하여 연산
+    # 4bit 압축된 파라미터를 bfloat16으로 복원하여 연산
     quantization_config = BitsAndBytesConfig(
         load_in_4bit=True,
         bnb_4bit_use_double_quant=True,
@@ -105,10 +114,15 @@ def training_function(script_args, training_args):
         bnb_4bit_compute_dtype=torch_dtype,
         bnb_4bit_quant_storage=quant_storage_dtype,
     )
+    
 
+    print()
+    print("모델로더")
+    print(">>>>>>>>>>>>")
     # 모델 로더
     model = AutoModelForCausalLM.from_pretrained(
         script_args.model_id,
+        token=True,
         quantization_config=quantization_config, 
         attn_implementation="sdpa", # 어텐션 연산 설정 (sdpa, flash_attention_2)
         torch_dtype=quant_storage_dtype,
@@ -118,6 +132,10 @@ def training_function(script_args, training_args):
     if training_args.gradient_checkpointing:
         model.gradient_checkpointing_enable()
 
+
+    print()
+    print("PEFT 설정 - Lora")
+    print(">>>>>>>>>>>>")
     # PEFT
     # >>>>>>>>>>>>>>>>>>>    
     # LoRA config based on QLoRA paper & Sebastian Raschka experiment
@@ -134,24 +152,40 @@ def training_function(script_args, training_args):
 
     # Training
     # >>>>>>>>>>>>>>>>>>>   
-    trainer = SFTTrainer(
-        model = model,
-        args = training_args,
-        train_dataset = train_dataset,
-        dataset_text_field = "text",
-        eval_dataset = test_dataset,
-        peft_config=peft_config,
-        max_seq_length=script_args.max_seq_length,
-        tokenizer = tokenizer,
-        packing = True,
-        dataset_kwargs = {
-            "add_special_tokens": False,  # We template with special tokens
-            "append_concat_token": False,  # No need to add additional separator token
-        }
+    # Supervised Fine-Tunning(질문-답변 형태로 학습) 
+    
+    test_args = SFTConfig(
+        max_length =512,
+        output_dir= "./llama-3.1-8b-hf" 
     )
     
-    if trainer.accelerator.is_main_process:
-        trainer.model.print_trainable_parameters()
+    trainer = SFTTrainer(
+        model = model,
+        args = test_args,
+        train_dataset = train_dataset,
+        dataset_text_field = ['instruction', 'output', 'url', 'messages'],
+        # eval_dataset = test_dataset,
+        peft_config=peft_config,
+        max_seq_length=4096,
+        #tokenizer = tokenizer,
+        packing = False,
+        # dataset_kwargs = {
+        #     "add_special_tokens": False,  # We template with special tokens
+        #     "append_concat_token": False,  # No need to add additional separator token
+        # }
+    )
+    
+    print()
+    print("훈련시작")
+    print(">>>>>>>>>>>>")
+    trainer.train()
+    
+    
+    print()
+    print("Parma 출력")
+    print(">>>>>>>>>>>>")
+    # if trainer.accelerator.is_main_process:
+    #     trainer.model.print_trainable_parameters()
         
     trainer.save_model()
 

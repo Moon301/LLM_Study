@@ -1,14 +1,14 @@
 # script parameters
-model_id: "Bllossom/llama-3-Korean-Bllossom-70B" # Hugging Face model id
+model_id: "meta-llama/Llama-3.1-8B" # Hugging Face model id
 dataset_path: "."                      # path to dataset
 #max_seq_length:  2048                     # max sequence length for model and packing of the dataset
 # training parameters
-output_dir: "./llama-3-korean-70b-hf"  # Temporary output directory for model checkpoints
+output_dir: "./llama-3.1-8b-hf"  # Temporary output directory for model checkpoints
 report_to: "tensorboard"               # report metrics to tensorboard
 learning_rate: 0.0002                  # learning rate 2e-4
 lr_scheduler_type: "constant"          # learning rate scheduler
 num_train_epochs: 1                    # number of training epochs
-per_device_train_batch_size: 2        # batch size per device during training
+per_device_train_batch_size: 1        # batch size per device during training
 per_device_eval_batch_size: 1          # batch size for evaluation
 gradient_accumulation_steps: 32         # number of steps before performing a backward/update pass
 optim: adamw_torch                     # use torch adamw optimizer
@@ -22,9 +22,13 @@ tf32: true                             # use tf32 precision
 gradient_checkpointing: false           # use gradient checkpointing to save memory
 # FSDP parameters: https://huggingface.co/docs/transformers/main/en/fsdp
 fsdp: "full_shard auto_wrap" # remove offload if enough GPU memory
-fsdp_transformer_layer_cls_to_wrap: "LlamaDecoderLayer"
+distributed_type: FSDP
 fsdp_config:
-  activation_checkpointing: true  
-  backward_prefetch: "backward_pre"
-  forward_prefetch: false
-  use_orig_params: false 
+  fsdp_offload_params: false
+  fsdp_sharding_strategy: FULL_SHARD
+  fsdp_state_dict_type: FULL_STATE_DICT
+  fsdp_transformer_layer_cls_to_wrap: LlamaDecoderLayer
+mixed_precision: bf16
+num_processes: 4
+gpu_ids: "0,1,2,3"
+main_process_port: 29501
