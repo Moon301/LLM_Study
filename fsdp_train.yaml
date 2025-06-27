@@ -1,0 +1,107 @@
+base_model: beomi/Llama-3-Open-Ko-8B
+model_type: LlamaForCausalLM
+tokenizer_type: AutoTokenizer
+
+load_in_8bit: false
+load_in_4bit: false
+strict: false
+
+datasets:
+  - path: DopeorNope/Ko-Optimize_Dataset
+    type:
+      system_prompt: ""
+      field_system: system
+      field_instruction: instruction
+      field_input: input
+      field_output: output
+      
+      format: "아래는 문제를 설명하는 지시사항과, 구체적인 답변 방식을 요구하는 입력이 함께 있는 문장입니다. 이 요청에 대해 적절하게 답변해 주세요.\n\n ###지시사항:\n{instruction}\n\n###입력:\n{input}\n\n답변:\n"
+      no_input_format: "아래는 문제를 설명하는 지시사항입니다. 이 요청에 대해 적절하게 답변해주세요.\n\n###지시사항:\n{instruction}\n\n##답변:\n"
+
+dataset_prepared_path: last_run_prepared
+val_set_size: 0.05
+
+output_dir: ./output/fsdp_llama3
+
+train_on_inputs: false
+sequence_len: 4096
+
+sample_packing: false
+pad_to_sequence_len: true
+
+adapter: lora
+lora_r: 16
+lora_alpha: 32
+lora_dropout: 0.05
+lora_target_modules:
+  - q_proj
+  - k_proj
+  - v_proj
+  - o_proj
+
+lora_target_linear: true 
+
+wandb_project: fsdp
+wandb_watch: "true"
+wandb_name: fsdp_llama3
+
+gradient_accumulation_steps: 4
+micro_batch_size: 1
+eval_batch_size: 1
+
+num_epochs: 1
+
+optimizer: adamw_torch_fused
+lr_scheduler: cosine
+
+learning_rate: 0.00001
+
+group_by_length: false
+
+bf16: true
+fp16: false
+tf32: false
+
+
+gradient_clipping: 0.0
+
+#gradient_checkpointing: true 
+# gradient_checkpointing_kwargs:
+#   use_reentrant: true
+
+resume_from_checkpoint:
+
+logging_steps: 1
+#flash_attention: true
+use_flash_attention: false
+
+
+warmup_steps: 10
+
+save_strategy: steps
+save_steps: 50
+eval_strategy: steps
+eval_steps: 50
+
+
+weight_decay: 0.001
+
+
+fsdp:
+  - full_shard
+  - auto_wrap
+
+fsdp_config:
+  activation_checkpointing: true
+  fsdp_limit_all_gathers: true 
+  fsdp_sync_module_states: true
+  fsdp_offload_params: false
+  fsdp_use_orig_params: false 
+  fsdp_cpu_ram_efficient_loading: true
+  fsdp_auto_wrap_policy: TRANSFORMER_BASED_WRAP
+  fsdp_transformer_layer_cls_to_wrap: LlamaDecoderLayer
+  fsdp_state_dict_type: SHARDED_STATE_DICT
+  fsdp_sharding_strategy: FULL_SHARD
+
+special_tokens:
+  pad_token: "<|end_of_text|>"
